@@ -17,6 +17,7 @@ export class PrismaCategoriesRepository implements ICategoriesRepository {
                 new Category(
                     category.id,
                     category.name,
+                    category.slug,
                     category.createdAt,
                     category.updatedAt,
                 ),
