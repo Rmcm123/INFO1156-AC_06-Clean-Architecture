@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common"
-import { ModerationService } from "@/moderation/moderation.service"
+import { ModerateContentUseCase } from "@/moderation/application/use-cases/moderate-content.use-case"
 import {
     CommentModerationResult,
     ICommentModerationPort,
@@ -7,9 +7,9 @@ import {
 
 @Injectable()
 export class CommentModerationAdapter implements ICommentModerationPort {
-    constructor(private readonly moderationService: ModerationService) {}
+    constructor(private readonly moderateContentUseCase: ModerateContentUseCase) {}
 
     moderate(text: string): Promise<CommentModerationResult> {
-        return this.moderationService.moderate(text)
+        return this.moderateContentUseCase.execute(text)
     }
 }
