@@ -1,19 +1,21 @@
 import { Body, Controller, Get, Post, Query } from "@nestjs/common"
 
-import { PostsService } from "@/posts/posts.service"
-import { FeedRankingStrategyFactory } from "@/posts/feed-ranking.strategy"
+import { CreatePostUseCase } from "@/posts/application/use-cases/create-post.use-case"
+import { GetAllPostsUseCase } from "@/posts/application/use-cases/get-all-posts.use-case"
+import { GetFeedUseCase } from "@/posts/application/use-cases/get-feed.use-case"
 import { CreatePostDto, FeedQueryDto } from "@/posts/posts.dtos"
 
 @Controller("api/posts")
 export class PostsController {
     constructor(
-        private readonly postsService: PostsService,
-        private readonly feedRankingFactory: FeedRankingStrategyFactory,
+        private readonly createPostUseCase: CreatePostUseCase,
+        private readonly getAllPostsUseCase: GetAllPostsUseCase,
+        private readonly getFeedUseCase: GetFeedUseCase,
     ) {}
 
     @Post()
     async create(@Body() body: CreatePostDto) {
-        const created = await this.postsService.create(body)
+        const created = await this.createPostUseCase.execute(body)
 
         return {
             ok: true,
@@ -23,7 +25,7 @@ export class PostsController {
 
     @Get()
     async findAll() {
-        const posts = await this.postsService.findAll()
+        const posts = await this.getAllPostsUseCase.execute()
 
         return {
             total: posts.length,
@@ -34,10 +36,7 @@ export class PostsController {
     @Get("feed")
     async getFeed(@Query() query: FeedQueryDto) {
         const mode = query.mode ?? "latest"
-        const feedPosts = await this.postsService.getFeedPosts(query.categoryId)
-        const rankedPosts = this.feedRankingFactory
-            .forMode(mode)
-            .rank(feedPosts)
+        const rankedPosts = await this.getFeedUseCase.execute(mode, query.categoryId)
 
         return {
             mode,

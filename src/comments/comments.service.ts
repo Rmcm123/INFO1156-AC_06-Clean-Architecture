@@ -2,17 +2,19 @@ import {
     BadRequestException,
     Injectable,
     NotFoundException,
+    Inject,
 } from "@nestjs/common"
 import { CreateCommentDto } from "@/posts/posts.dtos"
 import { ModerationService } from "@/moderation/moderation.service"
-import { PostsService } from "@/posts/posts.service"
+import { IPostsRepository, I_POSTS_REPOSITORY } from "@/posts/application/ports/posts.repository.interface"
 import { PrismaService } from "@/shared/prisma.service"
 
 @Injectable()
 export class CommentsService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly postsService: PostsService,
+        @Inject(I_POSTS_REPOSITORY)
+        private readonly postsRepository: IPostsRepository,
         private readonly moderationService: ModerationService,
     ) {}
 
@@ -50,7 +52,7 @@ export class CommentsService {
     }
 
     private async assertPostExists(postId: string) {
-        const post = await this.postsService.findById(postId)
+        const post = await this.postsRepository.findById(postId)
         if (!post) {
             throw new NotFoundException("Post no encontrado")
         }
