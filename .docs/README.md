@@ -29,3 +29,91 @@ Para preservar el correcto funcionamiento del resto de la aplicación, los módu
 
 ### Próximos pasos
 El resto del equipo se encargará de realizar este mismo nivel de aislamiento para los Dominios restantes (`Likes`, `Comments`, `Moderation` y `Categories`).
+---
+
+## Solucion Aplicada (Avance 2 - `Comments` y `Likes`)
+
+### Problemas Identificados
+En los modulos de interaccion social se encontraron problemas similares a los del modulo `Posts`:
+
+1. **Dependencia directa con Prisma:** `CommentsService` y `LikesService` dependian de `PrismaService`, por lo que la logica de aplicacion estaba mezclada con infraestructura.
+2. **Reglas de negocio dentro de servicios acoplados:** La validacion de existencia del post, la moderacion de comentarios y los valores por defecto de likes estaban concentrados en servicios NestJS.
+3. **Ausencia de puertos propios:** No existian interfaces para abstraer la persistencia de comentarios y likes, dificultando cambios de base de datos o pruebas unitarias aisladas.
+4. **Controladores sin casos de uso:** Los controladores delegaban a servicios que hacian demasiadas cosas, en vez de orquestar casos de uso concretos.
+
+### Solucion Implementada
+Se refactorizaron `comments` y `likes` siguiendo las cuatro capas de Clean Architecture:
+
+- **Dominio (`domain/`)**:
+  - `Comment` y `Like` son entidades puras, sin dependencias de NestJS ni Prisma.
+- **Aplicacion (`application/`)**:
+  - `AddCommentUseCase`: valida que el post exista, modera el contenido y crea el comentario.
+  - `GetCommentsByPostUseCase`: valida que el post exista y lista sus comentarios.
+  - `AddLikeUseCase`: valida que el post exista, aplica valores por defecto (`reactionType = "like"`, `weight = 1`) y protege la regla de peso minimo.
+  - `ICommentsRepository`, `ILikesRepository` e `ICommentModerationPort` definen los contratos que la aplicacion necesita.
+- **Infraestructura (`infrastructure/`)**:
+  - `PrismaCommentsRepository` y `PrismaLikesRepository` implementan los puertos usando Prisma.
+  - `CommentModerationAdapter` adapta el servicio de moderacion existente al puerto requerido por comments.
+- **Presentacion (`*.controller.ts`)**:
+  - `CommentsController` y `LikesController` ahora invocan casos de uso directamente y mantienen los mismos contratos HTTP.
+
+Los servicios `CommentsService` y `LikesService` quedaron como fachadas desacopladas, sin dependencia directa a `PrismaService`, para preservar compatibilidad si otro modulo los importa.
+
+### Diagrama Resumido
+
+```mermaid
+classDiagram
+    class CommentsController
+    class LikesController
+    class AddCommentUseCase
+    class GetCommentsByPostUseCase
+    class AddLikeUseCase
+    class ICommentsRepository
+    class ILikesRepository
+    class ICommentModerationPort
+    class IPostsRepository
+    class PrismaCommentsRepository
+    class PrismaLikesRepository
+    class CommentModerationAdapter
+    class Comment
+    class Like
+
+    CommentsController --> AddCommentUseCase
+    CommentsController --> GetCommentsByPostUseCase
+    LikesController --> AddLikeUseCase
+
+    AddCommentUseCase --> ICommentsRepository
+    AddCommentUseCase --> IPostsRepository
+    AddCommentUseCase --> ICommentModerationPort
+    GetCommentsByPostUseCase --> ICommentsRepository
+    GetCommentsByPostUseCase --> IPostsRepository
+    AddLikeUseCase --> ILikesRepository
+    AddLikeUseCase --> IPostsRepository
+
+    PrismaCommentsRepository ..|> ICommentsRepository
+    PrismaLikesRepository ..|> ILikesRepository
+    CommentModerationAdapter ..|> ICommentModerationPort
+    PrismaCommentsRepository --> Comment
+    PrismaLikesRepository --> Like
+```
+
+### Codigo Resumido
+
+```ts
+export class AddLikeUseCase {
+    async execute(data: { postId: string; reactionType?: string; weight?: number }) {
+        const post = await this.postsRepository.findById(data.postId)
+        if (!post) throw new NotFoundException("Post no encontrado")
+
+        const weight = data.weight ?? 1
+        if (weight < 1) throw new BadRequestException("El peso debe ser al menos 1")
+
+        return this.likesRepository.create({
+            postId: data.postId,
+            reactionType: data.reactionType ?? "like",
+            weight,
+            source: "likes-module",
+        })
+    }
+}
+```
